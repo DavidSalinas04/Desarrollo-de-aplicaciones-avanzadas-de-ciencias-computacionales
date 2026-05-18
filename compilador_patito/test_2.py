@@ -1,9 +1,3 @@
-# tests_entrega2_standalone.py
-# Tests que NO requieren PLY. Prueban directamente:
-#   - Cubo semántico
-#   - VariableTable / FunctionDirectory
-#   - SemanticChecker con ASTs construidos a mano
-
 import sys, os
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -24,7 +18,6 @@ def check(nombre, resultado):
         fail += 1
 
 def run_checker(ast):
-    """Corre el SemanticChecker sobre un AST y devuelve (func_dir, errores)."""
     import io, contextlib
     checker = SemanticChecker()
     buf = io.StringIO()
