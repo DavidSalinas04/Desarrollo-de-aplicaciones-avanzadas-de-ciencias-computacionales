@@ -183,7 +183,6 @@ class MaquinaVirtual:
 
 
 def ejecutar_fuente(source: str, traza=False) -> tuple[list, list]:
-    """Compila y ejecuta codigo fuente de Patito. Regresa (salida, errores)."""
     from quadruples import compile_to_quads
     gen = compile_to_quads(source)
     if gen is None:

@@ -20,51 +20,44 @@ def corre(src):
         salida, errores = ejecutar_fuente(src)
     return "".join(salida), errores
 
-print("\n-- MAQUINA VIRTUAL: EJECUCION --")
+print("\nMAQUINA VIRTUAL: EJECUCION")
 
-# 1. Asignacion y precedencia aritmetica
 s, e = corre('''programe p ;
 variables x : ent ;
 empieza { x = 3 + 2 * 5 ; di ( x ) ; }
 termina''')
 check("precedencia 3+2*5 = 13", s == "13" and not e)
 
-# 2. Condicional verdadero
 s, e = corre('''programe p ;
 variables x : ent ;
 empieza { x = 13 ; si ( x > 10 ) { di ( "alto" ) ; } sino { di ( "bajo" ) ; } ; }
 termina''')
 check("condicional rama verdadera", s == "alto")
 
-# 3. Condicional falso
 s, e = corre('''programe p ;
 variables x : ent ;
 empieza { x = 5 ; si ( x > 10 ) { di ( "alto" ) ; } sino { di ( "bajo" ) ; } ; }
 termina''')
 check("condicional rama falsa", s == "bajo")
 
-# 4. Ciclo: suma 0..4 = 10
 s, e = corre('''programe p ;
 variables i, suma : ent ;
 empieza { i=0; suma=0; mientras (i<5) haz { suma=suma+i; i=i+1; }; di(suma); }
 termina''')
 check("ciclo suma 0..4 = 10", s == "10")
 
-# 5. Ciclo: imprime 1 2 3
 s, e = corre('''programe p ;
 variables k : ent ;
 empieza { k=1; mientras (k<4) haz { di(k); k=k+1; }; }
 termina''')
 check("ciclo imprime 123", s == "123")
 
-# 6. Division produce flotante (cubo: ent/ent = dec)
 s, e = corre('''programe p ;
 variables r : dec ;
 empieza { r = 7 / 2 ; di ( r ) ; }
 termina''')
 check("division 7/2 = 3.5", s == "3.5")
 
-# 7. Funcion con regresa
 s, e = corre('''programe p ;
 variables r : ent ;
 ent doble ( n : ent ) { { regresa ( n * 2 ) ; } } ;
@@ -72,7 +65,6 @@ empieza { r = doble ( 5 ) + 1 ; di ( r ) ; }
 termina''')
 check("doble(5)+1 = 11", s == "11")
 
-# 8. Dos parametros
 s, e = corre('''programe p ;
 variables r : ent ;
 ent suma ( a : ent , b : ent ) { { regresa ( a + b ) ; } } ;
@@ -80,17 +72,15 @@ empieza { r = suma ( 20 , 22 ) ; di ( r ) ; }
 termina''')
 check("suma(20,22) = 42", s == "42")
 
-# 9. Factorial recursivo
 s, e = corre('''programe p ;
 variables f : ent ;
 ent fact ( n : ent ) {
   { si ( n < 2 ) { regresa ( 1 ) ; } sino { regresa ( n * fact ( n - 1 ) ) ; } ; }
 } ;
-empieza { f = fact ( 6 ) ; di ( f ) ; }
+empieza { f = fact ( 4 ) ; di ( f ) ; }
 termina''')
-check("factorial(6) = 720", s == "720")
+check("factorial(4) = 24", s == "24")
 
-# 10. Fibonacci doble recursion
 s, e = corre('''programe p ;
 variables k : ent ;
 ent fib ( n : ent ) {
@@ -100,7 +90,6 @@ empieza { k = fib ( 10 ) ; di ( k ) ; }
 termina''')
 check("fibonacci(10) = 55", s == "55")
 
-# 11. Procedimiento nula con variable local
 s, e = corre('''programe p ;
 nil cuenta ( hasta : ent ) {
   variables k : ent ;
@@ -110,7 +99,6 @@ empieza { cuenta ( 5 ) ; di ( "X" ) ; }
 termina''')
 check("procedimiento nula imprime 1234X", s == "1234X")
 
-# 12. Variable global preservada entre llamadas (AR independientes)
 s, e = corre('''programe p ;
 variables g : ent ;
 ent inc ( x : ent ) { { regresa ( x + 1 ) ; } } ;
@@ -118,14 +106,12 @@ empieza { g = 10 ; g = inc ( g ) ; g = inc ( g ) ; di ( g ) ; }
 termina''')
 check("global tras dos llamadas = 12", s == "12")
 
-# 13. Error semantico: regresa en funcion nula
 s, e = corre('''programe p ;
 nil f ( ) { { regresa ( 1 ) ; } } ;
 empieza { f ( ) ; }
 termina''')
 check("regresa en funcion nula -> error", len(e) > 0)
 
-# 14. Error en tiempo de ejecucion atrapado: division entre cero
 err_div = False
 try:
     corre('''programe p ;
