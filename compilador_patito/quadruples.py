@@ -65,7 +65,6 @@ JERARQUIA = {
 
 MAIN_SCOPE = '__main__'
 
-
 RET_TIPO = {
     'entero': INT, 'flotante': FLOAT, 'nula': 'nula', 'nil': 'nula',
     INT: INT, FLOAT: FLOAT,
@@ -86,6 +85,8 @@ class QuadrupleGenerator:
 
         self.func_dir: FunctionDirectory | None = None
         self.current_scope: str | None = None
+        self.current_ret_tipo: str | None = None
+        self.current_ret_dir = None
 
         # Administrador de memoria virtual
         self.vm = VirtualMemory()
@@ -103,7 +104,6 @@ class QuadrupleGenerator:
         self.pending_gosubs: list = []
 
         self.errors: list[str] = []
-
 
     def _cur_scope_label(self) -> str:
         return self.current_scope if self.current_scope is not None else MAIN_SCOPE
@@ -135,7 +135,6 @@ class QuadrupleGenerator:
         self.errors.append(full)
         print(full)
 
-
     def generar(self, ast) -> Queue:
         if ast is None or ast[0] != 'programa':
             self._report("AST invalido o programa nulo")
@@ -144,19 +143,26 @@ class QuadrupleGenerator:
         _, nombre, vars_opt, funcs, cuerpo = ast
         self.func_dir = FunctionDirectory(nombre)
 
+        # GOTO main, se rellena cuando empieza el cuerpo principal
         idx_goto_main = self._emit('GOTO', None, None, None)
 
+        # Variables globales, direcciones globales
         if vars_opt:
             self._registrar_vars(vars_opt, scope=None)
 
+        # Registrar TODAS las funciones
         for func in funcs:
             self._registrar_func(func)
 
+        # Generar el cuerpo de cada funcion
         for func in funcs:
             nombre_f = func[2]
             if not self.func_dir.exists_function(nombre_f):
                 continue
             self.current_scope = nombre_f
+            info_f = self.func_dir.lookup_function(nombre_f)
+            self.current_ret_tipo = info_f['tipo']
+            self.current_ret_dir = info_f['return_dir']
             self.vm.reset_temps()
             self.func_dir.set_start_quad(nombre_f, self.cuadruplos.size())
             self._gen_cuerpo(func[5])
@@ -166,15 +172,20 @@ class QuadrupleGenerator:
                 BOOL: self.vm.count('temp', BOOL),
             })
             self._emit('ENDFUNC', None, None, None)
+        self.current_ret_tipo = None
+        self.current_ret_dir = None
 
+        # Backpatch del GOTO main al inicio del cuerpo principal
         self._patch(idx_goto_main, self.cuadruplos.size())
 
+        # Cuerpo principal, global, espacio temporal fresco
         self.current_scope = None
         self.vm.reset_temps()
         self._gen_cuerpo(cuerpo)
 
         self._emit('END', None, None, None)
 
+        # Backpatch de GOSUB pendientes recursivas o llamadas hacia adelente
         for idx, fname in self.pending_gosubs:
             info = self.func_dir.lookup_function(fname)
             if info is not None and info['start_quad'] is not None:
@@ -182,7 +193,7 @@ class QuadrupleGenerator:
 
         return self.cuadruplos
 
-
+    
     def _registrar_vars(self, vars_node, scope):
         if vars_node is None:
             return
@@ -213,8 +224,10 @@ class QuadrupleGenerator:
         _, tipo_ret, nombre, params, vars_opt, _cuerpo = func_node
         tipo_ret = normaliza_tipo_ret(tipo_ret)
 
+        # Espacio local nuevo para esta funcion
         self.vm.reset_locals()
 
+        # Parametros direcciones locales
         param_dirs = []
         for _pname, ptipo in params:
             param_dirs.append(self.vm.alloc_local(ptipo))
@@ -225,22 +238,25 @@ class QuadrupleGenerator:
             self._report(str(e))
             return
 
+        # Nombres legibles de los parametros
         for (pname, _ptipo), paddr in zip(params, param_dirs):
             self._local_display_map(nombre)[paddr] = pname
 
+        # Variables locales
         if vars_opt:
             self._registrar_vars(vars_opt, scope=nombre)
 
+        # Espacio global de valor de retorno para funciones no nulas
         if tipo_ret in (INT, FLOAT):
             raddr = self.vm.alloc_global(tipo_ret)
             self.func_dir.set_return_dir(nombre, raddr)
             self.global_display[raddr] = f"ret_{nombre}"
 
+        # Conteo de recursos locales para ERA
         self.func_dir.set_local_counts(nombre, {
             INT:  self.vm.count('local', INT),
             FLOAT: self.vm.count('local', FLOAT),
         })
-
 
     def _gen_cuerpo(self, cuerpo):
         if cuerpo is None:
@@ -263,6 +279,8 @@ class QuadrupleGenerator:
             self._gen_ciclo(est)
         elif kind == 'llamada':
             self._procesar_llamada(est)
+        elif kind == 'retorna':
+            self._gen_retorna(est)
         elif kind == 'bloque':
             for s in est[1]:
                 self._gen_estatuto(s)
@@ -296,6 +314,30 @@ class QuadrupleGenerator:
         if esperado in (INT, FLOAT) and recibido in (INT, FLOAT):
             return True
         return False
+
+    def _gen_retorna(self, est):
+        _, expr = est
+        if self.current_scope is None:
+            self._report("'regresa' solo puede usarse dentro de una funcion")
+            return
+        if self.current_ret_tipo not in (INT, FLOAT):
+            self._report(
+                f"La funcion '{self.current_scope}' es nula y no puede usar 'regresa'"
+            )
+            return
+        self._gen_expresion(expr)
+        if self.pila_operandos.is_empty():
+            return
+        val = self.pila_operandos.pop()
+        tval = self.pila_tipos.pop()
+        if not self._compatible(self.current_ret_tipo, tval):
+            self._report(
+                f"Tipo de retorno incompatible en '{self.current_scope}': "
+                f"se esperaba '{self.current_ret_tipo}', se recibio '{tval}'"
+            )
+            return
+        # RETURN deposita el valor en el slot global de retorno y regresa
+        self._emit('RETURN', val, None, self.current_ret_dir)
 
     def _gen_imprime(self, est):
         _, items = est
@@ -369,7 +411,6 @@ class QuadrupleGenerator:
         self._emit('GOTO', None, None, ret)
         self._patch(falso, self.cuadruplos.size())
 
-
     def _procesar_llamada(self, node):
         _, nombre, args = node
         info = self.func_dir.lookup_function(nombre)
@@ -398,12 +439,12 @@ class QuadrupleGenerator:
             if i < len(params):
                 self.quad_result_label[idx] = f"{nombre}.{params[i][0]}"
 
+        # GOSUB, salta al inicio de la funcion
         start = info['start_quad']
         idx = self._emit('GOSUB', nombre, None, start)
         if start is None:
             self.pending_gosubs.append((idx, nombre))
         return info
-
 
     def _gen_expresion(self, node):
         if node is None:
@@ -457,6 +498,7 @@ class QuadrupleGenerator:
             if tipo_ret in (INT, FLOAT):
                 rdir = info['return_dir']
                 temp = self._alloc_temp(tipo_ret)
+                # copia del valor de retorno a un temporal
                 self._emit('=', rdir, None, temp)
                 self.pila_operandos.push(temp)
                 self.pila_tipos.push(tipo_ret)
@@ -494,7 +536,6 @@ class QuadrupleGenerator:
             self.pila_operandos.push(temp)
             self.pila_tipos.push(t_res)
             return
-
 
     def _disp(self, x, scope_label: str) -> str:
         if x is None:
@@ -552,6 +593,25 @@ class QuadrupleGenerator:
             usadas = self.vm.count(seg, tipo) if seg in ('global', 'const') else '-'
             print(f"{seg:<9} {tipo:<7} {f'{ini}-{fin}':<14} {str(usadas):<6}")
         print()
+
+
+    def exportar(self) -> dict:
+        funcs = {}
+        for fname, info in self.func_dir._functions.items():
+            funcs[fname] = {
+                'start_quad': info['start_quad'],
+                'return_dir': info['return_dir'],
+                'params': [(n, t, d) for (n, t), d
+                           in zip(info['params'], info['param_dirs'])],
+                'local_counts': info.get('local_counts', {}),
+                'temp_counts': info.get('temp_counts', {}),
+            }
+        return {
+            'cuadruplos': self.cuadruplos.items(),
+            'constantes': dict(self.vm.addr_to_const),   # direccion -> valor
+            'funciones': funcs,
+            'globales': dict(self.global_display),        # direccion -> nombre
+        }
 
 
 def compile_to_quads(source: str) -> QuadrupleGenerator:

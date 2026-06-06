@@ -14,6 +14,7 @@ reserved = {
     'mientras' : 'MIENTRAS',
     'haz'      : 'HAZ',
     'di'  : 'ESCRIBE',
+    'regresa' : 'RETORNA',
 }
  
 
@@ -79,14 +80,13 @@ def t_newline(t):
 t_ignore = ' \t\r'
  
 def t_error(t):
-    print(f"[Lexer] Carácter ilegal '{t.value[0]}' en línea {t.lineno}")
+    print(f"[Lexer] Caracter ilegal '{t.value[0]}' en linea {t.lineno}")
     t.lexer.skip(1)
  
 
 lexer = lex.lex()
  
 def tokenize(source: str):
-    """Devuelve lista de (tipo, valor, línea) para el código fuente dado."""
     lexer.input(source)
     result = []
     for tok in lexer:

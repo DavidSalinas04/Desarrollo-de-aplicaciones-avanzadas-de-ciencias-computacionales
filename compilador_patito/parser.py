@@ -103,6 +103,10 @@ def p_estatuto_imprime(p):
     '''estatuto : imprime'''
     p[0] = p[1]
 
+def p_estatuto_retorna(p):
+    '''estatuto : RETORNA IPAREN expresion DPAREN SEMICOLON'''
+    p[0] = ('retorna', p[3])
+
 def p_estatuto_bloque(p):
     '''estatuto : IPAREN estatutos DPAREN'''
     p[0] = ('bloque', p[2])
