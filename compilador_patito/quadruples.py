@@ -88,19 +88,15 @@ class QuadrupleGenerator:
         self.current_ret_tipo: str | None = None
         self.current_ret_dir = None
 
-        # Administrador de memoria virtual
         self.vm = VirtualMemory()
 
-        # Contador global de temporales (etiqueta legible unica t1, t2, ...)
         self._temp_counter = 0
 
-        # --- Mapas para impresion legible (direccion -> nombre) ---
-        self.global_display: dict = {}              # globales + slots de retorno
-        self.scope_local_display: dict = {}         # scope -> {dir -> nombre} (locales/params/temps)
-        self.quad_scope: list = []                  # scope activo al emitir cada cuadruplo
-        self.quad_result_label: dict = {}           # idx -> etiqueta legible del campo RES (para PARAM)
+        self.global_display: dict = {}
+        self.scope_local_display: dict = {}
+        self.quad_scope: list = []
+        self.quad_result_label: dict = {} 
 
-        # GOSUB pendientes de backpatch (llamadas a funciones aun sin start_quad)
         self.pending_gosubs: list = []
 
         self.errors: list[str] = []
@@ -150,7 +146,7 @@ class QuadrupleGenerator:
         if vars_opt:
             self._registrar_vars(vars_opt, scope=None)
 
-        # Registrar TODAS las funciones
+        # Registrar todas las funciones
         for func in funcs:
             self._registrar_func(func)
 
@@ -175,17 +171,14 @@ class QuadrupleGenerator:
         self.current_ret_tipo = None
         self.current_ret_dir = None
 
-        # Backpatch del GOTO main al inicio del cuerpo principal
         self._patch(idx_goto_main, self.cuadruplos.size())
 
-        # Cuerpo principal, global, espacio temporal fresco
         self.current_scope = None
         self.vm.reset_temps()
         self._gen_cuerpo(cuerpo)
 
         self._emit('END', None, None, None)
 
-        # Backpatch de GOSUB pendientes recursivas o llamadas hacia adelente
         for idx, fname in self.pending_gosubs:
             info = self.func_dir.lookup_function(fname)
             if info is not None and info['start_quad'] is not None:
@@ -246,7 +239,6 @@ class QuadrupleGenerator:
         if vars_opt:
             self._registrar_vars(vars_opt, scope=nombre)
 
-        # Espacio global de valor de retorno para funciones no nulas
         if tipo_ret in (INT, FLOAT):
             raddr = self.vm.alloc_global(tipo_ret)
             self.func_dir.set_return_dir(nombre, raddr)
@@ -336,7 +328,6 @@ class QuadrupleGenerator:
                 f"se esperaba '{self.current_ret_tipo}', se recibio '{tval}'"
             )
             return
-        # RETURN deposita el valor en el slot global de retorno y regresa
         self._emit('RETURN', val, None, self.current_ret_dir)
 
     def _gen_imprime(self, est):
@@ -439,7 +430,6 @@ class QuadrupleGenerator:
             if i < len(params):
                 self.quad_result_label[idx] = f"{nombre}.{params[i][0]}"
 
-        # GOSUB, salta al inicio de la funcion
         start = info['start_quad']
         idx = self._emit('GOSUB', nombre, None, start)
         if start is None:

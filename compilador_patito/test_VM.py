@@ -14,7 +14,6 @@ def check(nombre, cond):
         print(f"FAIL - {nombre}"); fail += 1
 
 def corre(src):
-    """Ejecuta y regresa la salida como una sola cadena (sin ruido en stdout)."""
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
         salida, errores = ejecutar_fuente(src)
